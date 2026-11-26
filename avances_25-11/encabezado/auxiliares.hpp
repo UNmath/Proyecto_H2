@@ -1,26 +1,26 @@
-#ifndef AUXILIARES_HPP
-#define AUXILIARES_HPP
-
+#pragma once
 #include "/usr/include/eigen3/Eigen/Dense"
+
+// Convención del vector de estado:
+// [0]: r, [1]: theta, [2]: phi, [3]: pr, [4]: ptheta
+using Vector5d = Eigen::Matrix<double, 5, 1>;
 
 namespace aux {
 
-using Vector8d = Eigen::Matrix<double, 8, 1>;
+double sigma(const Vector5d& estado, double a);
+double delta(const Vector5d& estado, double a);
 
-double sigma(const Vector8d& estado, double a);
-double delta(const Vector8d& estado, double a);
+double calcular_r_dot(const Vector5d& estado, double sigma, double delta);
+double calcular_theta_dot(const Vector5d& estado, double sigma);
+double calcular_phi_dot(const Vector5d& estado, double a, double E, double Lz, double sigma, double delta);
+double calcularTDot(const Vector5d& estado, double a, double E, double Lz, double sigma, double delta);
 
-double calcular_Lz(const Vector8d& estado, double a, double E);
-double calcular_phi_dot(const Vector8d& estado, double a, double E, double Lz);
-double calcular_Q(const Vector8d& estado, double a, double E);
-double calcular_kappa(const Vector8d& estado, double Lz, double a, double E);
-double calcularTDot(const Vector8d& estado, double a, double E, double Lz);
-double calcularE2(const Vector8d& estado, double a);
-double calcular_pr_dot(const Vector8d& estado, double a, double E, double kappa);
-double calcular_ptheta_pun(const Vector8d& estado, double Lzi, double Ei);
+double calcular_Lz(const Vector5d& estado, double a, double E, double sigma, double delta);
+double calcularE2(const Vector5d& estado, double a, double sigma, double delta);
+double calcular_Q(const Vector5d& estado, double a, double E, double Lz);
+double calcular_kappa(const Vector5d& estado, double Lz, double a, double E);
 
-Vector8d rk4(double a, double h, double Ei, double Lzi, const Vector8d& estado);
+double calcular_ptheta_dot(const Vector5d& estado, double Lzi, double Ei, double a, double sigma);
+double calcular_pr_dot(const Vector5d& estado, double Lzi, double Ei, double a, double sigma, double delta, double kappa);
 
-} 
-
-#endif 
+} // namespace aux

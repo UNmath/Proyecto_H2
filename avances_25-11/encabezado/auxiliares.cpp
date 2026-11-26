@@ -1,61 +1,68 @@
 #include "auxiliares.hpp"
 #include <cmath>
 
-
+// el vector de estado tendrá 
+// [0]: r, [1]: theta, [2]: phi, [3]: pr, [4]: ptheta
 namespace aux {
 
-double sigma(const Vector8d& estado, double a) {
-    double c = std::cos(estado(2));
+double sigma(const Vector5d& estado, double a) {
+    double c = std::cos(estado(1));
     return estado(0) * estado(0) + a * a * c * c;
 }
 
-double delta(const Vector8d& estado, double a) {
+double delta(const Vector5d& estado, double a) {
     return estado(0) * estado(0) + a * a - 2.0 * estado(0);
 }
 
-double calcular_Lz(const Vector8d& estado, double a, double E) {
-    double r = estado(0), theta = estado(2), phi_dot = estado(5);   
+double calcular_r_dot(const Vector5d& estado, double sigma, double delta) {
+    return estado(3) * delta / sigma;
+}
+
+double calcular_theta_dot(const Vector5d& estado, double sigma) {
+    return estado(4) / sigma;
+}
+
+double calcular_Lz(const Vector5d& estado, double a, double E, double sigma, double delta) {
+    double r = estado(0), theta = estado(1);
+    double phi_dot = calcular_phi_dot(estado, a, E, 0.0, sigma, delta); // ajusta si Lz es dato previo
     double sin_theta = std::sin(theta);
     double sin2_theta = sin_theta * sin_theta;
-    double sig = sigma(estado, a), del = delta(estado, a); 
 
-    double numerador = (sig * del * phi_dot - 2.0 * a * r * E) * sin2_theta;
-    double denominador = sig - 2.0 * r;
+    double numerador = (sigma * delta * phi_dot - 2.0 * a * r * E) * sin2_theta;
+    double denominador = sigma - 2.0 * r;
     return numerador / denominador;
 }
 
-double calcularE2(const Vector8d& estado, double a) {
-    double r = estado(0), r_dot = estado(1);
-    double theta = estado(2), theta_dot = estado(3);
-    double phi_dot = estado(5);
-    double sig = sigma(estado, a), del = delta(estado, a); 
+double calcularE2(const Vector5d& estado, double a, double sigma, double delta) {
+    double r = estado(0), theta = estado(1);
+    double r_dot = calcular_r_dot(estado, sigma, delta);
+    double theta_dot = calcular_theta_dot(estado, sigma);
+    double phi_dot = estado(2); // si no tienes phi_dot en estado, pásalo o reemplázalo por tu expresión
 
     double sin_theta = std::sin(theta);
 
-    return ((sig - 2.0 * r) / del) * ((r_dot * r_dot) + del * (theta_dot * theta_dot))
-         + del * (phi_dot * phi_dot) * (sin_theta * sin_theta); 
+    return ((sigma - 2.0 * r) / delta) * ((r_dot * r_dot) + delta * (theta_dot * theta_dot))
+         + delta * (phi_dot * phi_dot) * (sin_theta * sin_theta);
 }
 
-double calcular_phi_dot(const Vector8d& estado, double a, double E, double Lz) {
-    double r = estado(0), theta = estado(2);
+double calcular_phi_dot(const Vector5d& estado, double a, double E, double Lz, double sigma, double delta) {
+    double r = estado(0), theta = estado(1);
     double sin_theta = std::sin(theta);
     double sin2_theta = sin_theta * sin_theta;
-    double sig = sigma(estado, a), del = delta(estado, a);
 
-    double numerador = 2.0 * a * r * E + (sig - 2.0 * r) * Lz;
-    double denominador = sig * del * sin2_theta;
+    double numerador = 2.0 * a * r * E * sin2_theta + (sigma - 2.0 * r) * Lz;
+    double denominador = sigma * delta * sin2_theta;
     return numerador / denominador;
 }
 
-double calcularTDot(const Vector8d& estado, double a, double E, double Lz) {
+double calcularTDot(const Vector5d& estado, double a, double E, double Lz, double sigma, double delta) {
     double r = estado(0);
-    double numerador = 2.0 * r * ((r * r) + (a * a)) * E - 2.0 * a * r * Lz; 
-    return E + numerador / (sigma(estado, a) * delta(estado, a)); 
+    double numerador = 2.0 * r * ((r * r) + (a * a)) * E - 2.0 * a * r * Lz;
+    return E + numerador / (sigma * delta);
 }
 
-double calcular_Q(const Vector8d& estado, double a, double E) {
-    double theta = estado(2), p_theta = estado(7);
-    double Lz = calcular_Lz(estado, a, E);
+double calcular_Q(const Vector5d& estado, double a, double E, double Lz) {
+    double theta = estado(1), p_theta = estado(4);
 
     double sin_theta = std::sin(theta);
     double cos_theta = std::cos(theta);
@@ -65,37 +72,22 @@ double calcular_Q(const Vector8d& estado, double a, double E) {
     return (p_theta * p_theta) + ((Lz * Lz) / sin2_theta - (a * a) * (E * E)) * cos2_theta;
 }
 
-double calcular_kappa(const Vector8d& estado, double Lz, double a, double E) {
-    double Q = calcular_Q(estado, a, E);
+double calcular_kappa(const Vector5d& estado, double Lz, double a, double E) {
+    double Q = calcular_Q(estado, a, E, Lz);
     return Q + (Lz * Lz) + (a * a) * (E * E);
 }
 
-double calcular_pr_dot(const Vector8d& estado, double a, double E, double kappa) {
-    double r = estado(0);
-    double pr = estado(6);
-    
-    double sig = sigma(estado, a);
-    double del = delta(estado, a);
-    double Lz = calcular_Lz(estado, a, E);
-
-    double termino1 = (2.0 * r * (r * r + a * a) * (E * E) - kappa * (r - 1.0) - 2.0 * a * E * Lz) / (sig * del);
-    double termino2 = (2.0 * (pr * pr) * (r - 1.0)) / sig;
-
-    return termino1 - termino2;
+double calcular_ptheta_dot(const Vector5d& estado, double Lzi, double Ei, double a, double sigma) {
+    double theta = estado(1);
+    double s = std::sin(theta);
+    double s2 = s * s;
+    return (std::sin(2.0 * theta) / (2.0 * sigma)) * ((Lzi * Lzi) / (s2 * s2) - (a * a) * (Ei * Ei));
 }
 
-double calcular_ptheta_pun(const Vector8d& estado, double Lzi, double Ei) {
-    return 0.0;
+double calcular_pr_dot(const Vector5d& estado, double Lzi, double Ei, double a, double sigma, double delta, double kappa) {
+    double r = estado(0), pr = estado(3);
+    double num1 = 2.0 * r * (r * r + a * a) * (Ei * Ei) - kappa * (r - 1.0) - 2.0 * a * Ei * Lzi;
+    return (num1 / (sigma * delta)) - ((2.0 * pr * pr * (r - 1.0)) / sigma);
 }
 
-Vector8d rk4(double a, double h, double Ei, double Lzi, Vector8d& estado) {
-    double k1theta = 0.0, k2theta = 0.0, k3theta = 0.0, k4theta = 0.0;
-    double k1r=0.0,k2r=0.0, k3r=0.0, k4r=0.0;
-    double k1pr=0.0,k2pr=0.0,k3pr=0.0,k4pr=0.0;
-
-    //k1theta = h * calcular_phi_dot(estado);
-    //k1r = h * calcularprpunto(estado);
-    //k1pr = h; 
-    return estado;
-}
-}
+} // namespace aux
